@@ -193,7 +193,7 @@ The HTML report features:
   "details": [
     {
       "driver": 1,
-      "numero_carta": "10028588",
+      "numero_carta": "100123456",
       "status": "success",
       "files_created": ["fileFace", "fileSign", "filesFinger1", "filesFinger2"],
       "files_updated": [],

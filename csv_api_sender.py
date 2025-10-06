@@ -380,13 +380,8 @@ class BiometricAPIProcessor:
                 files_created = api_status.get('files_created', [])
                 files_updated = api_status.get('files_updated', [])
                 files_missing = api_status.get('files_missing', [])
-                driver_created = api_status.get('driver_created', False)
 
                 details_parts = []
-                if driver_created:
-                    details_parts.append("New driver created")
-                else:
-                    details_parts.append("Existing driver updated")
 
                 if files_created:
                     details_parts.append(f"Created: {', '.join(files_created)}")
@@ -408,7 +403,6 @@ class BiometricAPIProcessor:
                     'files_created': files_created,
                     'files_updated': files_updated,
                     'files_missing': files_missing,
-                    'driver_created': driver_created,
                     'csv_rows': len(rows)
                 })
 
