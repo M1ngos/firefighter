@@ -56,18 +56,18 @@ class BiometricAPIProcessor:
         'filesFinger2': ['filesFinger2', 'fingerprint2', 'finger2', 'fp2']
     }
 
-    def __init__(self, api_base_url: str, headers: Dict[str, str] = None, biometric_dir: str = None):
+    def __init__(self, api_base_url: str, headers: Dict[str, str] = None, biometric_dir: str = r"C:\Biometric"):
         """
         Initialize the processor.
 
         Args:
             api_base_url: The base API URL (e.g., http://127.0.0.1:5000)
             headers: Optional HTTP headers for API requests
-            biometric_dir: Base directory containing biometric files (e.g., C:\Biometric)
+            biometric_dir: Base directory containing biometric files (default: C:\Biometric)
         """
         self.api_base_url = api_base_url.rstrip('/')
         self.headers = headers or {'Content-Type': 'application/json'}
-        self.biometric_dir = biometric_dir
+        self.biometric_dir = biometric_dir or r"C:\Biometric"
         self.files_not_found = []
 
     def read_csv(self, csv_file: str) -> List[Dict]:
@@ -175,10 +175,7 @@ class BiometricAPIProcessor:
     def build_payload_from_rows(self, rows: List[Dict]) -> Dict:
         """
         Build API payload from multiple CSV rows for the same driver.
-        Supports multiple formats:
-        1. Auto-discovery from biometric_dir (if configured) - PRIORITY
-        2. Tipo_Biometria format (ID, Numero_Carta, Caminho_Completo, Tipo_Biometria)
-        3. Direct base64 format (numero_carta, fileFace, fileSign, etc.)
+        Auto-discovers files from biometric_dir (C:\Biometric by default).
 
         Args:
             rows: List of CSV rows for the same driver
@@ -189,42 +186,42 @@ class BiometricAPIProcessor:
         payload = {}
         numero_carta = self.get_license_number(rows[0]) if rows else None
 
-        # If biometric_dir is configured, ONLY use auto-discovery (ignore CSV paths)
-        if self.biometric_dir and numero_carta:
+        # Always use auto-discovery from biometric_dir
+        if numero_carta:
             file_mapping = self.find_biometric_files(numero_carta)
             for api_field, file_path in file_mapping.items():
                 base64_data = self.file_to_base64(file_path)
                 if base64_data:
                     payload[api_field] = base64_data
-            return payload
 
-        # Fallback: Use CSV data only if biometric_dir is NOT configured
-        for row in rows:
-            # Format 1: Tipo_Biometria with file paths
-            if 'Tipo_Biometria' in row and 'Caminho_Completo' in row:
-                tipo = str(row.get('Tipo_Biometria', '')).strip()
-                file_path = row.get('Caminho_Completo', '').strip()
-                is_active = row.get('Is_Active', '1').strip()
-
-                # Skip inactive records
-                if is_active != '1':
-                    continue
-
-                if tipo in self.BIOMETRIA_TYPE_MAPPING and file_path:
-                    api_field = self.BIOMETRIA_TYPE_MAPPING[tipo]
-
-                    # Convert file to base64
-                    base64_data = self.file_to_base64(file_path)
-                    if base64_data:
-                        payload[api_field] = base64_data
-
-            # Format 2: Direct base64 values (legacy support)
-            else:
-                for api_field, csv_field_options in self.FIELD_MAPPING.items():
-                    for csv_field in csv_field_options:
-                        if csv_field in row and row[csv_field] and row[csv_field].strip():
-                            payload[api_field] = row[csv_field].strip()
-                            break
+        # # LEGACY BEHAVIOR - COMMENTED OUT
+        # # Fallback: Use CSV data only if biometric_dir is NOT configured
+        # for row in rows:
+        #     # Format 1: Tipo_Biometria with file paths
+        #     if 'Tipo_Biometria' in row and 'Caminho_Completo' in row:
+        #         tipo = str(row.get('Tipo_Biometria', '')).strip()
+        #         file_path = row.get('Caminho_Completo', '').strip()
+        #         is_active = row.get('Is_Active', '1').strip()
+        #
+        #         # Skip inactive records
+        #         if is_active != '1':
+        #             continue
+        #
+        #         if tipo in self.BIOMETRIA_TYPE_MAPPING and file_path:
+        #             api_field = self.BIOMETRIA_TYPE_MAPPING[tipo]
+        #
+        #             # Convert file to base64
+        #             base64_data = self.file_to_base64(file_path)
+        #             if base64_data:
+        #                 payload[api_field] = base64_data
+        #
+        #     # Format 2: Direct base64 values (legacy support)
+        #     else:
+        #         for api_field, csv_field_options in self.FIELD_MAPPING.items():
+        #             for csv_field in csv_field_options:
+        #                 if csv_field in row and row[csv_field] and row[csv_field].strip():
+        #                     payload[api_field] = row[csv_field].strip()
+        #                     break
 
         return payload
 
