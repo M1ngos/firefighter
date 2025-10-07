@@ -56,16 +56,18 @@ class BiometricAPIProcessor:
         'filesFinger2': ['filesFinger2', 'fingerprint2', 'finger2', 'fp2']
     }
 
-    def __init__(self, api_base_url: str, headers: Dict[str, str] = None):
+    def __init__(self, api_base_url: str, headers: Dict[str, str] = None, biometric_dir: str = None):
         """
         Initialize the processor.
 
         Args:
             api_base_url: The base API URL (e.g., http://127.0.0.1:5000)
             headers: Optional HTTP headers for API requests
+            biometric_dir: Base directory containing biometric files (e.g., C:\Biometric)
         """
         self.api_base_url = api_base_url.rstrip('/')
         self.headers = headers or {'Content-Type': 'application/json'}
+        self.biometric_dir = biometric_dir
         self.files_not_found = []
 
     def read_csv(self, csv_file: str) -> List[Dict]:
@@ -133,12 +135,50 @@ class BiometricAPIProcessor:
 
         return dict(grouped)
 
+    def find_biometric_files(self, numero_carta: str) -> Dict[str, str]:
+        """
+        Find biometric files for a given license number in the biometric directory.
+
+        Args:
+            numero_carta: Driver's license number
+
+        Returns:
+            Dictionary mapping API field names to file paths
+        """
+        if not self.biometric_dir:
+            return {}
+
+        file_mapping = {}
+        carta_dir = os.path.join(self.biometric_dir, numero_carta)
+
+        if not os.path.exists(carta_dir):
+            logger.warning(f"Directory not found: {carta_dir}")
+            return {}
+
+        # Expected file patterns
+        patterns = {
+            'fileFace': ['Face.jpg', 'face.jpg', f'{numero_carta}.face.jpg'],
+            'fileSign': [f'{numero_carta}.assinatura.png', f'{numero_carta}.signature.png'],
+            'filesFinger1': [f'{numero_carta}.Indicador Direito.bmp', f'{numero_carta}.right_index.bmp'],
+            'filesFinger2': [f'{numero_carta}.Indicador Esquerdo.bmp', f'{numero_carta}.left_index.bmp']
+        }
+
+        for api_field, file_patterns in patterns.items():
+            for pattern in file_patterns:
+                file_path = os.path.join(carta_dir, pattern)
+                if os.path.exists(file_path):
+                    file_mapping[api_field] = file_path
+                    break
+
+        return file_mapping
+
     def build_payload_from_rows(self, rows: List[Dict]) -> Dict:
         """
         Build API payload from multiple CSV rows for the same driver.
-        Supports both formats:
-        1. Tipo_Biometria format (ID, Numero_Carta, Caminho_Completo, Tipo_Biometria)
-        2. Direct base64 format (numero_carta, fileFace, fileSign, etc.)
+        Supports multiple formats:
+        1. Auto-discovery from biometric_dir (if configured) - PRIORITY
+        2. Tipo_Biometria format (ID, Numero_Carta, Caminho_Completo, Tipo_Biometria)
+        3. Direct base64 format (numero_carta, fileFace, fileSign, etc.)
 
         Args:
             rows: List of CSV rows for the same driver
@@ -147,7 +187,18 @@ class BiometricAPIProcessor:
             Dictionary with API field names and base64 values
         """
         payload = {}
+        numero_carta = self.get_license_number(rows[0]) if rows else None
 
+        # If biometric_dir is configured, ONLY use auto-discovery (ignore CSV paths)
+        if self.biometric_dir and numero_carta:
+            file_mapping = self.find_biometric_files(numero_carta)
+            for api_field, file_path in file_mapping.items():
+                base64_data = self.file_to_base64(file_path)
+                if base64_data:
+                    payload[api_field] = base64_data
+            return payload
+
+        # Fallback: Use CSV data only if biometric_dir is NOT configured
         for row in rows:
             # Format 1: Tipo_Biometria with file paths
             if 'Tipo_Biometria' in row and 'Caminho_Completo' in row:
@@ -512,6 +563,10 @@ CSV Format:
         help='API base URL (e.g., http://127.0.0.1:5000)'
     )
     parser.add_argument(
+        '--biometric-dir',
+        help='Base directory containing biometric files (e.g., C:\\Biometric). Files should be in subdirectories named by license number.'
+    )
+    parser.add_argument(
         '--header',
         action='append',
         help='HTTP header in format "Key: Value" (can be used multiple times)'
@@ -534,7 +589,7 @@ CSV Format:
             headers[key.strip()] = value.strip()
 
     # Process CSV and send to API
-    processor = BiometricAPIProcessor(args.api_base_url, headers)
+    processor = BiometricAPIProcessor(args.api_base_url, headers, args.biometric_dir)
     results = processor.process_csv(args.csv_file)
 
     # Save results if requested

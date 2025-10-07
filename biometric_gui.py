@@ -29,7 +29,8 @@ class BiometricUploaderGUI:
 
         # Variables
         self.csv_file_path = tk.StringVar()
-        self.api_url = tk.StringVar(value="http://127.0.0.1:5000")
+        self.biometric_dir = tk.StringVar(value=r"C:\Biometric")
+        self.api_url = tk.StringVar(value="http:192.168.0.7:4000")
         self.auth_token = tk.StringVar()
         self.is_processing = False
         self.message_queue = queue.Queue()
@@ -110,8 +111,23 @@ class BiometricUploaderGUI:
             command=self.browse_csv_file
         ).grid(row=0, column=1)
 
+        # Biometric Directory
+        ttk.Label(config_frame, text="Biometric Dir:").grid(row=1, column=0, sticky=tk.W, pady=5)
+
+        bio_dir_frame = ttk.Frame(config_frame)
+        bio_dir_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        bio_dir_frame.columnconfigure(0, weight=1)
+
+        ttk.Entry(bio_dir_frame, textvariable=self.biometric_dir).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
+
+        # ttk.Button(
+        #     bio_dir_frame,
+        #     text="Browse...",
+        #     command=self.browse_biometric_dir
+        # ).grid(row=0, column=1)
+
         # API URL
-        ttk.Label(config_frame, text="API URL:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="API URL:").grid(row=2, column=0, sticky=tk.W, pady=5)
         ttk.Entry(
             config_frame,
             textvariable=self.api_url,
@@ -218,6 +234,15 @@ class BiometricUploaderGUI:
         if filename:
             self.csv_file_path.set(filename)
 
+    def browse_biometric_dir(self):
+        """Open directory dialog to select biometric directory."""
+        dirname = filedialog.askdirectory(
+            title="Select Biometric Directory",
+            initialdir=self.biometric_dir.get() if self.biometric_dir.get() else None
+        )
+        if dirname:
+            self.biometric_dir.set(dirname)
+
     def append_status(self, message, tag="info"):
         """Append message to status text area."""
         self.status_text.config(state='normal')
@@ -299,7 +324,8 @@ class BiometricUploaderGUI:
                 headers['Authorization'] = f'Bearer {self.auth_token.get()}'
 
             # Create processor
-            processor = BiometricAPIProcessor(self.api_url.get(), headers)
+            biometric_dir = self.biometric_dir.get() if self.biometric_dir.get() else None
+            processor = BiometricAPIProcessor(self.api_url.get(), headers, biometric_dir)
 
             # Read CSV
             self.message_queue.put({

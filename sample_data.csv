@@ -6,3 +6,4 @@ ID,Numero_Carta,Nome_Ficheiro,Caminho_Completo,Is_Active,Tipo_Biometria
 5,10029445,FOTO_10029445_1694521300.bmp,/opt/dev-container/PycharmProjects/firefighter/sample_biometric_data/10029445/FOTO_MISSING.bmp,1,1
 6,10029445,ASSINATURA_10029445_1694521300.bmp,/opt/dev-container/PycharmProjects/firefighter/sample_biometric_data/10029445/ASSINATURA_10029445.bmp,1,2
 7,10030122,IMPRESSAO_DIGITAL_1_10030122_1694521350.bmp,/opt/dev-container/PycharmProjects/firefighter/sample_biometric_data/10030122/IMPRESSAO_DIGITAL_1_10030122.bmp,1,3
+9,10838635,FOTO_10054321_1694521263.jpg,/opt/dev-container/PycharmProjects/firefighter/sample_biometric_data/10030122/IMPRESSAO_DIGITAL_1_10030122.bmp,1,1
