@@ -84,7 +84,15 @@ class BiometricAPIProcessor:
         try:
             with open(csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                for row in reader:
+                for line_num, row in enumerate(reader, start=2):  # start=2 because line 1 is header
+                    # Skip malformed rows that aren't dictionaries
+                    if not isinstance(row, dict):
+                        logger.warning(f"Skipping malformed row at line {line_num}: {row}")
+                        continue
+                    # Skip completely empty rows
+                    if not any(row.values()):
+                        logger.debug(f"Skipping empty row at line {line_num}")
+                        continue
                     data.append(row)
             logger.info(f"Successfully read {len(data)} rows from {csv_file}")
             return data
@@ -129,6 +137,11 @@ class BiometricAPIProcessor:
         grouped = defaultdict(list)
 
         for record in records:
+            # Extra safety: ensure record is a dictionary
+            if not isinstance(record, dict):
+                logger.warning(f"Skipping non-dict record in grouping: {record}")
+                continue
+
             numero_carta = record.get('Numero_Carta', '').strip()
             if numero_carta:
                 grouped[numero_carta].append(record)
