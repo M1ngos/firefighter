@@ -150,7 +150,10 @@ class BiometricAPIProcessor:
 
     def find_biometric_files(self, numero_carta: str) -> Dict[str, str]:
         """
-        Find biometric files for a given license number in the biometric directory.
+        Find biometric files for a given license number.
+        Supports TWO folder structures:
+        1. Hierarchical: {biometric_dir}/{numero_carta}/Face.jpg
+        2. Flat: {biometric_dir}/{numero_carta}.face.jpg
 
         Args:
             numero_carta: Driver's license number
@@ -162,26 +165,68 @@ class BiometricAPIProcessor:
             return {}
 
         file_mapping = {}
+
+        # STRATEGY 1: Try hierarchical structure first (existing behavior)
         carta_dir = os.path.join(self.biometric_dir, numero_carta)
+        hierarchical_exists = os.path.exists(carta_dir)
 
-        if not os.path.exists(carta_dir):
-            logger.warning(f"Directory not found: {carta_dir}")
-            return {}
-
-        # Expected file patterns
-        patterns = {
+        # Expected file patterns for hierarchical structure
+        hierarchical_patterns = {
             'fileFace': ['Face.jpg', 'face.jpg', f'{numero_carta}.face.jpg'],
             'fileSign': [f'{numero_carta}.assinatura.png', f'{numero_carta}.signature.png'],
             'filesFinger1': [f'{numero_carta}.Indicador Direito.bmp', f'{numero_carta}.right_index.bmp'],
             'filesFinger2': [f'{numero_carta}.Indicador Esquerdo.bmp', f'{numero_carta}.left_index.bmp']
         }
 
-        for api_field, file_patterns in patterns.items():
-            for pattern in file_patterns:
-                file_path = os.path.join(carta_dir, pattern)
+        # Expected file patterns for flat structure (all in base directory)
+        flat_patterns = {
+            'fileFace': [
+                f'{numero_carta}.face.jpg',
+                f'{numero_carta}.Face.jpg'
+            ],
+            'fileSign': [
+                f'{numero_carta}.assinatura.png',
+                f'{numero_carta}.signature.png'
+            ],
+            'filesFinger1': [
+                f'{numero_carta}.Indicador Direito.bmp',
+                f'{numero_carta}.right_index.bmp'
+            ],
+            'filesFinger2': [
+                f'{numero_carta}.Indicador Esquerdo.bmp',
+                f'{numero_carta}.left_index.bmp'
+            ]
+        }
+
+        # Try hierarchical structure first
+        if hierarchical_exists:
+            for api_field, file_patterns in hierarchical_patterns.items():
+                for pattern in file_patterns:
+                    file_path = os.path.join(carta_dir, pattern)
+                    if os.path.exists(file_path):
+                        file_mapping[api_field] = file_path
+                        break
+
+        # FALLBACK: Try flat structure for any missing files
+        for api_field in ['fileFace', 'fileSign', 'filesFinger1', 'filesFinger2']:
+            # Skip if already found in hierarchical structure
+            if api_field in file_mapping:
+                continue
+
+            # Try flat structure patterns
+            for pattern in flat_patterns[api_field]:
+                file_path = os.path.join(self.biometric_dir, pattern)
                 if os.path.exists(file_path):
                     file_mapping[api_field] = file_path
+                    logger.info(f"Found {api_field} in flat structure: {pattern}")
                     break
+
+        # Log warning if no files found at all
+        if not file_mapping:
+            if hierarchical_exists:
+                logger.warning(f"No biometric files found for {numero_carta} in hierarchical structure: {carta_dir}")
+            else:
+                logger.warning(f"No biometric files found for {numero_carta} (tried both hierarchical and flat structures)")
 
         return file_mapping
 

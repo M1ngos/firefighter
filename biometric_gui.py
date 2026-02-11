@@ -27,10 +27,13 @@ class BiometricUploaderGUI:
         self.root.geometry("900x700")
         self.root.resizable(True, True)
 
-        # Variables
-        self.csv_file_path = tk.StringVar()
-        self.biometric_dir = tk.StringVar(value=r"C:\Biometric")
-        self.api_url = tk.StringVar(value="http:192.168.0.7:4000")
+        # Load configuration
+        config = self.load_config()
+
+        # Variables - use loaded config values
+        self.csv_file_path = tk.StringVar(value=config.get('last_csv_path', ''))
+        self.biometric_dir = tk.StringVar(value=config.get('biometric_dir', r"C:\Biometric"))
+        self.api_url = tk.StringVar(value=config.get('api_url', "http:192.168.0.7:4000"))
         self.auth_token = tk.StringVar()
         self.is_processing = False
         self.message_queue = queue.Queue()
@@ -43,6 +46,66 @@ class BiometricUploaderGUI:
 
         # Start queue checker
         self.check_queue()
+
+    def load_config(self):
+        """Load configuration from config.json in project directory."""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        default_config = {
+            'biometric_dir': r'C:\Biometric',
+            'api_url': 'http://192.168.0.7:4000',
+            'last_csv_path': '',
+            'version': '1.0'
+        }
+
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+                    # Validate biometric_dir if specified
+                    if 'biometric_dir' in config and config['biometric_dir']:
+                        if not os.path.exists(config['biometric_dir']):
+                            logger.warning(f"Configured biometric directory not found: {config['biometric_dir']}")
+                            # Keep the value - drive may be disconnected temporarily
+
+                    # Merge loaded config with defaults (defaults as fallback)
+                    return {**default_config, **config}
+            else:
+                logger.info(f"No config file found at {config_path}, using defaults")
+                return default_config
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in config file: {e}")
+            return default_config
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            return default_config
+
+    def save_config(self):
+        """Save current settings to config.json."""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        config = {
+            'biometric_dir': self.biometric_dir.get(),
+            'api_url': self.api_url.get(),
+            'last_csv_path': self.csv_file_path.get(),
+            'version': '1.0'
+        }
+
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            logger.info(f"Configuration saved to {config_path}")
+        except PermissionError:
+            logger.error(f"Permission denied writing config to {config_path}")
+            # Don't show error to user - non-critical failure
+        except Exception as e:
+            logger.error(f"Error saving config: {e}")
 
     def setup_styles(self):
         """Setup ttk styles for modern look."""
@@ -120,11 +183,11 @@ class BiometricUploaderGUI:
 
         ttk.Entry(bio_dir_frame, textvariable=self.biometric_dir).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
 
-        # ttk.Button(
-        #     bio_dir_frame,
-        #     text="Browse...",
-        #     command=self.browse_biometric_dir
-        # ).grid(row=0, column=1)
+        ttk.Button(
+            bio_dir_frame,
+            text="Browse...",
+            command=self.browse_biometric_dir
+        ).grid(row=0, column=1)
 
         # API URL
         ttk.Label(config_frame, text="API URL:").grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -132,22 +195,22 @@ class BiometricUploaderGUI:
             config_frame,
             textvariable=self.api_url,
             width=50
-        ).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        ).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
 
         # Auth Token (optional)
-        ttk.Label(config_frame, text="Auth Token:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="Auth Token:").grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Entry(
             config_frame,
             textvariable=self.auth_token,
             show="*",
             width=50
-        ).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        ).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
 
         ttk.Label(
             config_frame,
             text="(Optional - leave blank if not required)",
             style="Subtitle.TLabel"
-        ).grid(row=3, column=1, sticky=tk.W, padx=(10, 0))
+        ).grid(row=4, column=1, sticky=tk.W, padx=(10, 0))
 
         # Progress Section
         progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="15")
@@ -233,6 +296,7 @@ class BiometricUploaderGUI:
         )
         if filename:
             self.csv_file_path.set(filename)
+            self.save_config()
 
     def browse_biometric_dir(self):
         """Open directory dialog to select biometric directory."""
@@ -242,6 +306,10 @@ class BiometricUploaderGUI:
         )
         if dirname:
             self.biometric_dir.set(dirname)
+            self.save_config()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Biometric directory updated: {dirname}")
 
     def append_status(self, message, tag="info"):
         """Append message to status text area."""
@@ -298,6 +366,19 @@ class BiometricUploaderGUI:
         if not os.path.exists(self.csv_file_path.get()):
             messagebox.showerror("Error", "CSV file does not exist")
             return
+
+        # Validate biometric directory
+        if self.biometric_dir.get():
+            if not os.path.exists(self.biometric_dir.get()):
+                response = messagebox.askyesno(
+                    "Directory Not Found",
+                    f"The biometric directory does not exist:\n\n{self.biometric_dir.get()}\n\n"
+                    f"Files will be skipped if not found.\n\n"
+                    f"Continue anyway?",
+                    icon='warning'
+                )
+                if not response:
+                    return
 
         # Clear previous results
         self.status_text.config(state='normal')
