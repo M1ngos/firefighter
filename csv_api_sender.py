@@ -230,6 +230,33 @@ class BiometricAPIProcessor:
 
         return file_mapping
 
+    def build_payload_from_license_number(self, numero_carta: str) -> Dict:
+        """
+        Build API payload from just a license number (no CSV data required).
+        Discovers biometric files automatically from biometric_dir.
+
+        Args:
+            numero_carta: Driver's license number
+
+        Returns:
+            Dictionary with API field names and base64 values
+        """
+        payload = {}
+
+        if not numero_carta:
+            return payload
+
+        # Find biometric files for this license number
+        file_mapping = self.find_biometric_files(numero_carta)
+
+        # Convert each file to base64 and add to payload
+        for api_field, file_path in file_mapping.items():
+            base64_data = self.file_to_base64(file_path)
+            if base64_data:
+                payload[api_field] = base64_data
+
+        return payload
+
     def build_payload_from_rows(self, rows: List[Dict]) -> Dict:
         """
         Build API payload from multiple CSV rows for the same driver.

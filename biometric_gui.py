@@ -24,7 +24,7 @@ class BiometricUploaderGUI:
         """Initialize the GUI."""
         self.root = root
         self.root.title("Biometric Data Uploader - api-condutores")
-        self.root.geometry("900x700")
+        self.root.geometry("950x750")
         self.root.resizable(True, True)
 
         # Load configuration
@@ -35,6 +35,8 @@ class BiometricUploaderGUI:
         self.biometric_dir = tk.StringVar(value=config.get('biometric_dir', r"C:\Biometric"))
         self.api_url = tk.StringVar(value=config.get('api_url', "http:192.168.0.7:4000"))
         self.auth_token = tk.StringVar()
+        self.input_mode = tk.StringVar(value=config.get('input_mode', 'csv'))
+        self.manual_numbers_list = config.get('manual_numbers', [])
         self.is_processing = False
         self.message_queue = queue.Queue()
 
@@ -57,6 +59,8 @@ class BiometricUploaderGUI:
             'biometric_dir': r'C:\Biometric',
             'api_url': 'http://192.168.0.7:4000',
             'last_csv_path': '',
+            'input_mode': 'csv',
+            'manual_numbers': [],
             'version': '1.0'
         }
 
@@ -94,6 +98,8 @@ class BiometricUploaderGUI:
             'biometric_dir': self.biometric_dir.get(),
             'api_url': self.api_url.get(),
             'last_csv_path': self.csv_file_path.get(),
+            'input_mode': self.input_mode.get(),
+            'manual_numbers': self.manual_numbers_list,
             'version': '1.0'
         }
 
@@ -153,19 +159,47 @@ class BiometricUploaderGUI:
             style="Subtitle.TLabel"
         ).grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
 
-        # Configuration Section
-        config_frame = ttk.LabelFrame(main_frame, text="Configuration", padding="15")
-        config_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
-        config_frame.columnconfigure(1, weight=1)
+        # Input Mode Selection
+        mode_frame = ttk.LabelFrame(main_frame, text="Input Mode", padding="15")
+        mode_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
 
-        # CSV File Selection
-        ttk.Label(config_frame, text="CSV File:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Radiobutton(
+            mode_frame,
+            text="CSV File",
+            variable=self.input_mode,
+            value='csv',
+            command=self.on_mode_change
+        ).grid(row=0, column=0, padx=(0, 20), sticky=tk.W)
 
-        file_frame = ttk.Frame(config_frame)
-        file_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        ttk.Radiobutton(
+            mode_frame,
+            text="Manual Numbers",
+            variable=self.input_mode,
+            value='manual',
+            command=self.on_mode_change
+        ).grid(row=0, column=1, sticky=tk.W)
+
+        # CSV File Section
+        self.csv_frame = ttk.LabelFrame(main_frame, text="CSV File", padding="15")
+        self.csv_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.csv_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            self.csv_frame,
+            text="Select CSV file:",
+            font=("Segoe UI", 10, "bold")
+        ).grid(row=0, column=0, sticky=tk.W, pady=(0, 10), columnspan=2)
+
+        file_frame = ttk.Frame(self.csv_frame)
+        file_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), columnspan=2, pady=(0, 5))
         file_frame.columnconfigure(0, weight=1)
 
-        self.csv_entry = ttk.Entry(file_frame, textvariable=self.csv_file_path, state="readonly")
+        self.csv_entry = ttk.Entry(
+            file_frame,
+            textvariable=self.csv_file_path,
+            state="readonly",
+            font=("Segoe UI", 10)
+        )
         self.csv_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
 
         ttk.Button(
@@ -174,11 +208,134 @@ class BiometricUploaderGUI:
             command=self.browse_csv_file
         ).grid(row=0, column=1)
 
+        # Manual Entry Section - HORIZONTAL LAYOUT
+        self.manual_frame = ttk.LabelFrame(main_frame, text="Manual License Numbers", padding="15")
+        self.manual_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.manual_frame.columnconfigure(0, weight=1)
+        self.manual_frame.columnconfigure(1, weight=1)
+
+        # LEFT COLUMN: Input Area
+        left_frame = ttk.Frame(self.manual_frame)
+        left_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 10))
+        left_frame.columnconfigure(0, weight=1)
+        left_frame.rowconfigure(1, weight=1)
+
+        ttk.Label(
+            left_frame,
+            text="Paste or type numbers (one per line):",
+            font=("Segoe UI", 9, "bold")
+        ).grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+
+        self.manual_input_text = scrolledtext.ScrolledText(
+            left_frame,
+            height=6,
+            width=30,
+            font=("Consolas", 9),
+            wrap=tk.NONE,
+            bg="#ffffff",
+            fg="#000000"
+        )
+        self.manual_input_text.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+
+        # Add placeholder text
+        placeholder = "Example:\n10082220\n10116145\n10054321"
+        self.manual_input_text.insert("1.0", placeholder)
+        self.manual_input_text.config(fg="#999999")
+
+        # Bind focus events for placeholder
+        def on_focus_in(event):
+            if self.manual_input_text.get("1.0", tk.END).strip() == placeholder:
+                self.manual_input_text.delete("1.0", tk.END)
+                self.manual_input_text.config(fg="#000000")
+
+        def on_focus_out(event):
+            if not self.manual_input_text.get("1.0", tk.END).strip():
+                self.manual_input_text.insert("1.0", placeholder)
+                self.manual_input_text.config(fg="#999999")
+
+        self.manual_input_text.bind("<FocusIn>", on_focus_in)
+        self.manual_input_text.bind("<FocusOut>", on_focus_out)
+
+        input_buttons = ttk.Frame(left_frame)
+        input_buttons.grid(row=2, column=0, sticky=(tk.W, tk.E))
+        input_buttons.columnconfigure(0, weight=1)
+        input_buttons.columnconfigure(1, weight=1)
+
+        ttk.Button(
+            input_buttons,
+            text="➕ Add to Queue",
+            command=self.add_manual_numbers,
+            style="Accent.TButton"
+        ).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+
+        ttk.Button(
+            input_buttons,
+            text="🗑 Clear",
+            command=lambda: self.manual_input_text.delete("1.0", tk.END)
+        ).grid(row=0, column=1, sticky=(tk.W, tk.E))
+
+        # RIGHT COLUMN: Queue
+        right_frame = ttk.Frame(self.manual_frame)
+        right_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(10, 0))
+        right_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(1, weight=1)
+
+        self.manual_queue_label = ttk.Label(
+            right_frame,
+            text=f"Queue ({len(self.manual_numbers_list)}):",
+            font=("Segoe UI", 9, "bold")
+        )
+        self.manual_queue_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+
+        listbox_frame = ttk.Frame(right_frame, relief=tk.SUNKEN, borderwidth=1)
+        listbox_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        listbox_frame.columnconfigure(0, weight=1)
+        listbox_frame.rowconfigure(0, weight=1)
+
+        self.manual_numbers_listbox = tk.Listbox(
+            listbox_frame,
+            height=6,
+            font=("Consolas", 9),
+            selectmode=tk.EXTENDED,
+            bg="#ffffff",
+            relief=tk.FLAT
+        )
+        self.manual_numbers_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.manual_numbers_listbox.yview)
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.manual_numbers_listbox.config(yscrollcommand=scrollbar.set)
+
+        queue_buttons = ttk.Frame(right_frame)
+        queue_buttons.grid(row=2, column=0, sticky=(tk.W, tk.E))
+        queue_buttons.columnconfigure(0, weight=1)
+        queue_buttons.columnconfigure(1, weight=1)
+
+        ttk.Button(
+            queue_buttons,
+            text="Remove Selected",
+            command=self.remove_selected_numbers
+        ).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+
+        ttk.Button(
+            queue_buttons,
+            text="Clear All",
+            command=self.clear_manual_numbers
+        ).grid(row=0, column=1, sticky=(tk.W, tk.E))
+
+        # Initialize listbox with saved numbers
+        self.update_manual_listbox()
+
+        # Configuration Section
+        config_frame = ttk.LabelFrame(main_frame, text="Configuration", padding="15")
+        config_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+        config_frame.columnconfigure(1, weight=1)
+
         # Biometric Directory
-        ttk.Label(config_frame, text="Biometric Dir:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="Biometric Dir:").grid(row=0, column=0, sticky=tk.W, pady=5)
 
         bio_dir_frame = ttk.Frame(config_frame)
-        bio_dir_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        bio_dir_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
         bio_dir_frame.columnconfigure(0, weight=1)
 
         ttk.Entry(bio_dir_frame, textvariable=self.biometric_dir).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
@@ -190,31 +347,31 @@ class BiometricUploaderGUI:
         ).grid(row=0, column=1)
 
         # API URL
-        ttk.Label(config_frame, text="API URL:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="API URL:").grid(row=1, column=0, sticky=tk.W, pady=5)
         ttk.Entry(
             config_frame,
             textvariable=self.api_url,
             width=50
-        ).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        ).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
 
         # Auth Token (optional)
-        ttk.Label(config_frame, text="Auth Token:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="Auth Token:").grid(row=2, column=0, sticky=tk.W, pady=5)
         ttk.Entry(
             config_frame,
             textvariable=self.auth_token,
             show="*",
             width=50
-        ).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        ).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
 
         ttk.Label(
             config_frame,
             text="(Optional - leave blank if not required)",
             style="Subtitle.TLabel"
-        ).grid(row=4, column=1, sticky=tk.W, padx=(10, 0))
+        ).grid(row=3, column=1, sticky=tk.W, padx=(10, 0))
 
         # Progress Section
         progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="15")
-        progress_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 15))
+        progress_frame.grid(row=5, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 15))
         progress_frame.columnconfigure(0, weight=1)
         progress_frame.rowconfigure(1, weight=1)
 
@@ -249,7 +406,7 @@ class BiometricUploaderGUI:
 
         # Summary Section
         summary_frame = ttk.Frame(main_frame)
-        summary_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+        summary_frame.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
         summary_frame.columnconfigure((0, 1, 2, 3), weight=1)
 
         self.total_label = ttk.Label(summary_frame, text="Total: 0", font=("Segoe UI", 10, "bold"))
@@ -266,7 +423,7 @@ class BiometricUploaderGUI:
 
         # Action Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, sticky=(tk.W, tk.E))
+        button_frame.grid(row=7, column=0, sticky=(tk.W, tk.E))
         button_frame.columnconfigure(0, weight=1)
 
         self.upload_button = ttk.Button(
@@ -286,7 +443,12 @@ class BiometricUploaderGUI:
         self.save_report_button.grid(row=0, column=1, sticky=tk.E)
 
         # Configure grid weights for resizing
-        main_frame.rowconfigure(2, weight=1)
+        main_frame.rowconfigure(2, weight=0)  # CSV frame - no expand
+        main_frame.rowconfigure(3, weight=0)  # Manual frame - no expand
+        main_frame.rowconfigure(5, weight=1)  # Progress frame - expand
+
+        # Call on_mode_change to show/hide appropriate section
+        self.on_mode_change()
 
     def browse_csv_file(self):
         """Open file dialog to select CSV file."""
@@ -310,6 +472,111 @@ class BiometricUploaderGUI:
             import logging
             logger = logging.getLogger(__name__)
             logger.info(f"Biometric directory updated: {dirname}")
+
+    def on_mode_change(self):
+        """Handle input mode change (CSV vs Manual)."""
+        mode = self.input_mode.get()
+
+        if mode == 'csv':
+            # Show CSV section, hide manual section
+            self.csv_frame.grid()
+            self.manual_frame.grid_remove()
+        else:
+            # Show manual section, hide CSV section
+            self.csv_frame.grid_remove()
+            self.manual_frame.grid()
+
+    def add_manual_numbers(self):
+        """Add license numbers from input text to the queue."""
+        text = self.manual_input_text.get("1.0", tk.END)
+
+        # Check if placeholder text
+        placeholder = "Example:\n10082220\n10116145\n10054321"
+        if text.strip() == placeholder:
+            messagebox.showwarning("No Input", "Please enter license numbers first")
+            return
+
+        lines = text.strip().split('\n')
+
+        added = 0
+        duplicates = 0
+        invalid = 0
+
+        for line in lines:
+            numero = line.strip()
+            if not numero:
+                continue
+
+            # Check duplicates
+            if numero in self.manual_numbers_list:
+                duplicates += 1
+                continue
+
+            self.manual_numbers_list.append(numero)
+            added += 1
+
+        self.update_manual_listbox()
+        self.save_config()
+
+        # Clear input area and reset placeholder
+        self.manual_input_text.delete("1.0", tk.END)
+        self.manual_input_text.insert("1.0", placeholder)
+        self.manual_input_text.config(fg="#999999")
+
+        # Show summary
+        if added > 0 or duplicates > 0 or invalid > 0:
+            msg = f"Added {added} number(s)"
+            if duplicates > 0:
+                msg += f"\n{duplicates} duplicate(s) ignored"
+            if invalid > 0:
+                msg += f"\n{invalid} invalid format(s) ignored"
+
+            messagebox.showinfo("Numbers Added", msg)
+        elif added == 0:
+            messagebox.showwarning("No Numbers", "No valid license numbers found to add")
+
+    def remove_selected_numbers(self):
+        """Remove selected numbers from the queue."""
+        selected_indices = self.manual_numbers_listbox.curselection()
+
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select numbers to remove")
+            return
+
+        # Remove in reverse order to maintain indices
+        for index in reversed(selected_indices):
+            del self.manual_numbers_list[index]
+
+        self.update_manual_listbox()
+        self.save_config()
+
+    def clear_manual_numbers(self):
+        """Clear all numbers from the queue."""
+        if not self.manual_numbers_list:
+            return
+
+        response = messagebox.askyesno(
+            "Clear All",
+            f"Remove all {len(self.manual_numbers_list)} license number(s) from queue?"
+        )
+
+        if response:
+            self.manual_numbers_list.clear()
+            self.update_manual_listbox()
+            self.save_config()
+
+    def update_manual_listbox(self):
+        """Update the listbox display with current numbers."""
+        self.manual_numbers_listbox.delete(0, tk.END)
+
+        for numero in self.manual_numbers_list:
+            self.manual_numbers_listbox.insert(tk.END, numero)
+
+        # Update label count
+        count = len(self.manual_numbers_list)
+        self.manual_queue_label.config(
+            text=f"Queue ({count}):"
+        )
 
     def append_status(self, message, tag="info"):
         """Append message to status text area."""
@@ -354,17 +621,27 @@ class BiometricUploaderGUI:
 
     def start_upload(self):
         """Start the upload process."""
-        # Validation
-        if not self.csv_file_path.get():
-            messagebox.showerror("Error", "Please select a CSV file")
-            return
+        # Validation based on input mode
+        mode = self.input_mode.get()
 
+        if mode == 'csv':
+            # CSV mode validation
+            if not self.csv_file_path.get():
+                messagebox.showerror("Error", "Please select a CSV file")
+                return
+
+            if not os.path.exists(self.csv_file_path.get()):
+                messagebox.showerror("Error", "CSV file does not exist")
+                return
+        else:
+            # Manual mode validation
+            if not self.manual_numbers_list:
+                messagebox.showerror("Error", "Please add at least one license number to the queue")
+                return
+
+        # Common validation
         if not self.api_url.get():
             messagebox.showerror("Error", "Please enter API URL")
-            return
-
-        if not os.path.exists(self.csv_file_path.get()):
-            messagebox.showerror("Error", "CSV file does not exist")
             return
 
         # Validate biometric directory
@@ -408,21 +685,42 @@ class BiometricUploaderGUI:
             biometric_dir = self.biometric_dir.get() if self.biometric_dir.get() else None
             processor = BiometricAPIProcessor(self.api_url.get(), headers, biometric_dir)
 
-            # Read CSV
-            self.message_queue.put({
-                'type': 'status',
-                'text': f"📂 Reading CSV file: {os.path.basename(self.csv_file_path.get())}",
-                'tag': 'info'
-            })
+            # Get license numbers based on input mode
+            mode = self.input_mode.get()
 
-            records = processor.read_csv(self.csv_file_path.get())
-            grouped_records = processor.group_by_license(records)
+            if mode == 'csv':
+                # CSV mode: Read and group CSV
+                self.message_queue.put({
+                    'type': 'status',
+                    'text': f"📂 Reading CSV file: {os.path.basename(self.csv_file_path.get())}",
+                    'tag': 'info'
+                })
 
-            self.message_queue.put({
-                'type': 'status',
-                'text': f"✓ Found {len(records)} CSV rows → {len(grouped_records)} unique drivers\n",
-                'tag': 'success'
-            })
+                records = processor.read_csv(self.csv_file_path.get())
+                grouped_records = processor.group_by_license(records)
+
+                self.message_queue.put({
+                    'type': 'status',
+                    'text': f"✓ Found {len(records)} CSV rows → {len(grouped_records)} unique drivers\n",
+                    'tag': 'success'
+                })
+            else:
+                # Manual mode: Create simple dict from manual numbers
+                self.message_queue.put({
+                    'type': 'status',
+                    'text': f"📋 Processing {len(self.manual_numbers_list)} license number(s) from queue",
+                    'tag': 'info'
+                })
+
+                # Create grouped_records dict (empty list for each number - no CSV data needed)
+                grouped_records = {numero: [] for numero in self.manual_numbers_list}
+                records = []  # No CSV records in manual mode
+
+                self.message_queue.put({
+                    'type': 'status',
+                    'text': f"✓ Ready to process {len(grouped_records)} driver(s)\n",
+                    'tag': 'success'
+                })
 
             self.message_queue.put({
                 'type': 'status',
@@ -432,7 +730,7 @@ class BiometricUploaderGUI:
 
             # Process each driver
             results = {
-                'total_csv_rows': len(records),
+                'total_csv_rows': len(records) if mode == 'csv' else 0,
                 'total_drivers': len(grouped_records),
                 'success': 0,
                 'failed': 0,
@@ -450,8 +748,13 @@ class BiometricUploaderGUI:
                     results['skipped'] += 1
                     continue
 
-                # Build payload
-                payload = processor.build_payload_from_rows(rows)
+                # Build payload based on mode
+                if mode == 'manual':
+                    # Manual mode: Build payload directly from license number (no CSV rows)
+                    payload = processor.build_payload_from_license_number(numero_carta)
+                else:
+                    # CSV mode: Build payload from CSV rows
+                    payload = processor.build_payload_from_rows(rows)
 
                 if not payload:
                     msg = f"[{idx}/{len(grouped_records)}] ⊘ SKIPPED {numero_carta}: No biometric data found"
