@@ -51,6 +51,7 @@ The application supports **two CSV formats**:
 ### Format 1: Tipo_Biometria (File Paths)
 
 **Columns:**
+
 - `Numero_Carta` - Driver's license number (required)
 - `Caminho_Completo` - Full path to biometric file
 - `Tipo_Biometria` - Type code: 1=Face, 2=Signature, 3=Fingerprint1, 4=Fingerprint2
@@ -58,11 +59,13 @@ The application supports **two CSV formats**:
 - `ID`, `Nome_Ficheiro` - Optional metadata
 
 **Features:**
+
 - Automatically reads files and converts to base64
 - Groups multiple rows by `Numero_Carta`
 - Sends all biometric data for each driver in one API call
 
 **Sample CSV:**
+
 ```csv
 ID,Numero_Carta,Nome_Ficheiro,Caminho_Completo,Is_Active,Tipo_Biometria
 1,10028588,FOTO_10028588.bmp,/path/to/FOTO_10028588.bmp,1,1
@@ -74,6 +77,7 @@ ID,Numero_Carta,Nome_Ficheiro,Caminho_Completo,Is_Active,Tipo_Biometria
 ### Format 2: Direct Base64 (Legacy)
 
 **Columns:**
+
 - `numero_carta` (or `Numero_Carta`, `license_number`) - Required
 - `fileFace` - Base64 encoded face image
 - `fileSign` - Base64 encoded signature
@@ -81,6 +85,7 @@ ID,Numero_Carta,Nome_Ficheiro,Caminho_Completo,Is_Active,Tipo_Biometria
 - `filesFinger2` - Base64 encoded fingerprint 2
 
 **Sample CSV:**
+
 ```csv
 numero_carta,fileFace,fileSign,filesFinger1,filesFinger2
 1234567,<base64_face>,<base64_sign>,<base64_fp1>,<base64_fp2>
@@ -166,6 +171,7 @@ When you save a report in the GUI, you get **both** JSON and HTML:
 - **🌐 HTML Report** - Beautiful, interactive web page
 
 The HTML report features:
+
 - ✨ Modern, professional design
 - 🎨 Color-coded status (green/red/yellow)
 - 🔍 Filter by status (All/Success/Failed/Skipped)
@@ -175,6 +181,7 @@ The HTML report features:
 
 **Example HTML Report:**
 ![Report Screenshot]
+
 - Summary cards showing totals at a glance
 - Filterable list of all uploads
 - Detailed file information (created/updated/missing)
@@ -221,6 +228,7 @@ python report_viewer.py upload_report.json
 **Endpoint:** `POST http://<api_url>/biometric-data/{numero_carta}`
 
 **Request Body:**
+
 ```json
 {
   "fileFace": "<base64_encoded_image>",
@@ -231,6 +239,7 @@ python report_viewer.py upload_report.json
 ```
 
 **Response Codes:**
+
 - ✅ **201** - Success (files_created, files_updated, files_missing)
 - ⚠️ **400** - Skipped (no valid biometric data)
 - ❌ **404** - Config error (wrong API endpoint)
@@ -243,6 +252,7 @@ python report_viewer.py upload_report.json
 See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for detailed build instructions.
 
 **Quick build:**
+
 ```bash
 pip install -r requirements.txt
 python build.py

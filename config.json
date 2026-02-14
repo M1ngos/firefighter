@@ -1,0 +1,10 @@
+{
+  "biometric_dir": "/home/acsun-arch/Projects/FireFighter/sample_biometric_data",
+  "api_url": "http://192.168.0.7:4000",
+  "last_csv_path": "/home/acsun-arch/Projects/FireFighter/sample_data.csv",
+  "input_mode": "manual",
+  "manual_numbers": [
+    "10028588"
+  ],
+  "version": "1.0"
+}

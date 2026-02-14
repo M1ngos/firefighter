@@ -12,6 +12,7 @@ import argparse
 import sys
 import base64
 import os
+import glob
 from typing import Dict, List, Optional
 from collections import defaultdict
 import logging
@@ -172,29 +173,45 @@ class BiometricAPIProcessor:
 
         # Expected file patterns for hierarchical structure
         hierarchical_patterns = {
-            'fileFace': ['Face.jpg', 'face.jpg', f'{numero_carta}.face.jpg'],
-            'fileSign': [f'{numero_carta}.assinatura.png', f'{numero_carta}.signature.png'],
-            'filesFinger1': [f'{numero_carta}.Indicador Direito.bmp', f'{numero_carta}.right_index.bmp'],
-            'filesFinger2': [f'{numero_carta}.Indicador Esquerdo.bmp', f'{numero_carta}.left_index.bmp']
+            'fileFace': [
+                'Face.jpg', 'face.jpg', f'{numero_carta}.face.jpg',
+                f'FOTO_{numero_carta}_*.jpg'  # Pattern: FOTO_10028588_1694521263.jpg
+            ],
+            'fileSign': [
+                f'{numero_carta}.assinatura.png', f'{numero_carta}.signature.png',
+                f'ASSINATURA_{numero_carta}_*.png'  # Pattern: ASSINATURA_10028588_1694521263.png
+            ],
+            'filesFinger1': [
+                f'{numero_carta}.Indicador Direito.bmp', f'{numero_carta}.right_index.bmp',
+                f'IMPRESSAO_DIGITAL_1_{numero_carta}_*.bmp'  # Pattern: IMPRESSAO_DIGITAL_1_10028588_1694521263.bmp
+            ],
+            'filesFinger2': [
+                f'{numero_carta}.Indicador Esquerdo.bmp', f'{numero_carta}.left_index.bmp',
+                f'IMPRESSAO_DIGITAL_2_{numero_carta}_*.bmp'  # Pattern: IMPRESSAO_DIGITAL_2_10028588_1694521263.bmp
+            ]
         }
 
         # Expected file patterns for flat structure (all in base directory)
         flat_patterns = {
             'fileFace': [
                 f'{numero_carta}.face.jpg',
-                f'{numero_carta}.Face.jpg'
+                f'{numero_carta}.Face.jpg',
+                f'FOTO_{numero_carta}_*.jpg'
             ],
             'fileSign': [
                 f'{numero_carta}.assinatura.png',
-                f'{numero_carta}.signature.png'
+                f'{numero_carta}.signature.png',
+                f'ASSINATURA_{numero_carta}_*.png'
             ],
             'filesFinger1': [
                 f'{numero_carta}.Indicador Direito.bmp',
-                f'{numero_carta}.right_index.bmp'
+                f'{numero_carta}.right_index.bmp',
+                f'IMPRESSAO_DIGITAL_1_{numero_carta}_*.bmp'
             ],
             'filesFinger2': [
                 f'{numero_carta}.Indicador Esquerdo.bmp',
-                f'{numero_carta}.left_index.bmp'
+                f'{numero_carta}.left_index.bmp',
+                f'IMPRESSAO_DIGITAL_2_{numero_carta}_*.bmp'
             ]
         }
 
@@ -203,9 +220,20 @@ class BiometricAPIProcessor:
             for api_field, file_patterns in hierarchical_patterns.items():
                 for pattern in file_patterns:
                     file_path = os.path.join(carta_dir, pattern)
-                    if os.path.exists(file_path):
-                        file_mapping[api_field] = file_path
-                        break
+
+                    # Check if pattern contains wildcard
+                    if '*' in pattern:
+                        # Use glob to find matching files
+                        matches = glob.glob(file_path)
+                        if matches:
+                            # Use first match
+                            file_mapping[api_field] = matches[0]
+                            break
+                    else:
+                        # Direct file check
+                        if os.path.exists(file_path):
+                            file_mapping[api_field] = file_path
+                            break
 
         # FALLBACK: Try flat structure for any missing files
         for api_field in ['fileFace', 'fileSign', 'filesFinger1', 'filesFinger2']:
@@ -216,10 +244,21 @@ class BiometricAPIProcessor:
             # Try flat structure patterns
             for pattern in flat_patterns[api_field]:
                 file_path = os.path.join(self.biometric_dir, pattern)
-                if os.path.exists(file_path):
-                    file_mapping[api_field] = file_path
-                    logger.info(f"Found {api_field} in flat structure: {pattern}")
-                    break
+
+                # Check if pattern contains wildcard
+                if '*' in pattern:
+                    # Use glob to find matching files
+                    matches = glob.glob(file_path)
+                    if matches:
+                        file_mapping[api_field] = matches[0]
+                        logger.info(f"Found {api_field} in flat structure: {os.path.basename(matches[0])}")
+                        break
+                else:
+                    # Direct file check
+                    if os.path.exists(file_path):
+                        file_mapping[api_field] = file_path
+                        logger.info(f"Found {api_field} in flat structure: {pattern}")
+                        break
 
         # Log warning if no files found at all
         if not file_mapping:
