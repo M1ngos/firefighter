@@ -1,18 +1,40 @@
-name: Build EXE
+name: Build Executables
 
 on: [push]
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            artifact_name: BiometricUploader-Windows
+            executable_ext: .exe
+            pyinstaller_args: --onefile --windowed --icon=NONE --add-data=csv_api_sender.py;.
+          - os: ubuntu-latest
+            artifact_name: BiometricUploader-Linux
+            executable_ext: ''
+            pyinstaller_args: --onefile --windowed --icon=NONE --add-data=csv_api_sender.py:.
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt pyinstaller
-      - run: pyinstaller --onefile csv_api_sender.py
-      - uses: actions/upload-artifact@v4
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --name=BiometricUploader ${{ matrix.pyinstaller_args }} --clean --noconfirm biometric_gui.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: build
-          path: dist/*.exe
+          name: ${{ matrix.artifact_name }}
+          path: dist/*${{ matrix.executable_ext }}
