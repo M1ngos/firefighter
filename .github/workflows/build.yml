@@ -11,11 +11,11 @@ jobs:
           - os: windows-latest
             artifact_name: BiometricUploader-Windows
             executable_ext: .exe
-            pyinstaller_args: --onefile --windowed --icon=NONE --add-data=csv_api_sender.py;.
+            add_data_sep: ';'
           - os: ubuntu-latest
             artifact_name: BiometricUploader-Linux
             executable_ext: ''
-            pyinstaller_args: --onefile --windowed --icon=NONE --add-data=csv_api_sender.py:.
+            add_data_sep: ':'
 
     runs-on: ${{ matrix.os }}
 
@@ -31,7 +31,8 @@ jobs:
         run: pip install -r requirements.txt pyinstaller
 
       - name: Build executable
-        run: pyinstaller --name=BiometricUploader ${{ matrix.pyinstaller_args }} --clean --noconfirm biometric_gui.py
+        run: |
+          pyinstaller --name=BiometricUploader --onefile --windowed --icon=NONE --add-data="csv_api_sender.py${{ matrix.add_data_sep }}." --clean --noconfirm biometric_gui.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
